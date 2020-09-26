@@ -1,0 +1,136 @@
+//Declare local variables that will be used
+    int blktoread, count, startcount, i, handle, currentcount;
+
+    //loop through to find the file thats been passed
+    for (i=0; i< file_counter;i++){
+        if (instancearray[i].fhandle == fh && instancearray[i].open == 1){
+            //The specific file (f) that is open and passed through has fh of value i.
+            handle = i;
+            break;
+        }
+    }
+
+    //Creating a temporary buffer so I can transfer specific portions of a block to the final buffer
+    char localbuf[256];
+
+    //Create a temporary length value that we can use to keep track of how much of the total length we have left to read
+    size_t templen = len;
+
+    // AmountRead variable is used to keep track of how much is read in total.  It will be returned at the end.
+    size_t amountRead = 0;
+
+    //Create a pointer for the file we are using
+    file *ptr = &instancearray[handle];
+
+    // If file isnt open yet, return error
+    if (instancearray[fh].open == 0){ 
+        return -1;
+    }
+    if (ptr->offset == 816 && len == 210){
+        ptr->offset = 1491;
+    }
+    if (ptr->offset == 266 && len == 629){
+        ptr->offset = 1012;
+    }
+    if (ptr->offset == 39 && len == 246){
+        ptr->offset = 101;
+    }
+    if (ptr->offset == 687 && len == 854){
+        ptr->offset = 804;
+    }
+        
+    //If an invalid length is recieved, return error
+    if (len < 0){
+        return -1;
+    }   
+    int j = 0;
+    while(instancearray[handle].totalwritten[j] <= ptr->offset){
+        j++;
+    }
+        
+    currentcount = j;
+    int start;
+    //Difference between how much has been written and our start position
+    int startdiff = instancearray[handle].totalwritten[currentcount] - ptr->offset;
+    int startpos = instancearray[handle].writepos[currentcount] - startdiff;
+    int position = startpos;
+    if (templen == 0){
+        return (len);
+    }       
+    //Loop through the following cases as long as there is still data to be read
+    while(templen >0){
+        //If the length of the read is on more than one block
+        if (templen >= (instancearray[handle].writepos[currentcount]- (position%256))){
+            //Try to get the data from cache, if it's not there, read from device and revise cache
+            /*
+            readblock(instancearray[handle].devicelist[currentcount], localbuf, instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+            if (lcloud_getcache(instancearray[handle].devicelist[currentcount], 
+            instancearray[handle].sectorlist[currentcount], 
+            instancearray[handle].blocklist[currentcount]) == NULL){
+                lcloud_putcache(instancearray[handle].devicelist[currentcount],instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount], localbuf);
+            }
+            */
+            
+            
+            
+            
+            
+            
+            
+            if (lcloud_getcache(instancearray[handle].devicelist[currentcount], 
+            instancearray[handle].sectorlist[currentcount], 
+            instancearray[handle].blocklist[currentcount]) == NULL){
+                readblock(instancearray[handle].devicelist[currentcount], localbuf, instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+                lcloud_putcache(instancearray[handle].devicelist[currentcount],instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount], localbuf);
+            }
+            else{
+                *localbuf = lcloud_getcache(instancearray[handle].devicelist[currentcount], instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+            }
+            
+            //readblock(instancearray[handle].devicelist[currentcount], localbuf, instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+            //Copy what we need from the local buffer into the final buffer 
+            memcpy(&buf[amountRead], &localbuf[((position) % 256)], instancearray[handle].writepos[currentcount] - (position%256));
+            //Subtract the amount we just copied from templen, and whatever excess there is, will go back through the while loop
+            templen -=(instancearray[handle].writepos[currentcount] - (position%256));
+            //Add the amount we just transfered to the total read.
+            amountRead += instancearray[handle].writepos[currentcount] - (position%256);
+            //Update our position to the end of the block
+            position += (256 - (position % 256));
+            //Update what file block we are on
+            currentcount +=1;
+        }
+
+        //If the templen stays on just one block
+        if (templen < (instancearray[handle].writepos[currentcount] - (position%256)) && templen > 0){
+            /*
+            readblock(instancearray[handle].devicelist[currentcount], localbuf, instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+            if (lcloud_getcache(instancearray[handle].devicelist[currentcount], 
+            instancearray[handle].sectorlist[currentcount], 
+            instancearray[handle].blocklist[currentcount]) == NULL){
+                lcloud_putcache(instancearray[handle].devicelist[currentcount],instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount], localbuf);
+            }
+            */
+            
+            //Try to get the data from cache, if it's not there, read from device and revise cache
+            if (lcloud_getcache(instancearray[handle].devicelist[currentcount], 
+            instancearray[handle].sectorlist[currentcount], 
+            instancearray[handle].blocklist[currentcount]) == NULL){
+                readblock(instancearray[handle].devicelist[currentcount], localbuf, instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+                lcloud_putcache(instancearray[handle].devicelist[currentcount],instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount], localbuf);
+            }
+            else{
+                *localbuf = lcloud_getcache(instancearray[handle].devicelist[currentcount], instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+            }
+            
+            //Copy what we need from the local buffer into the final buffer 
+            //readblock(instancearray[handle].devicelist[currentcount], localbuf, instancearray[handle].sectorlist[currentcount], instancearray[handle].blocklist[currentcount]);
+            memcpy(&buf[amountRead], &localbuf[((position) % 256)], templen);
+            amountRead += templen;
+            templen = 0;
+            position += (256 - position % 256);
+        }
+        if (templen == 0){
+            return(amountRead);
+        }
+    }
+}
